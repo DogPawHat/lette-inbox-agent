@@ -16,7 +16,7 @@ export const Route = createRootRouteWithContext<{
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lette Inbox Agent" },
+      { title: "Lette - Inbox Agent" },
       {
         name: "description",
         content:
@@ -36,7 +36,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
-      <body className="font-sans antialiased [overflow-wrap:anywhere]">
+      <body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-accent">
         <div className="min-h-screen bg-background text-foreground">
           <Header />
           <main>{children}</main>
