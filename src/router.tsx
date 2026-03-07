@@ -25,9 +25,7 @@ export function getRouter() {
     defaultPreload: "intent",
     context: { queryClient },
     Wrap: ({ children }) => (
-      <ConvexProvider client={convexQueryClient.convexClient}>
-        {children}
-      </ConvexProvider>
+      <ConvexProvider client={convexQueryClient.convexClient}>{children}</ConvexProvider>
     ),
   });
   setupRouterSsrQueryIntegration({

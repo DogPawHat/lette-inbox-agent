@@ -8,7 +8,9 @@
  * @module
  */
 
-import type * as messages from "../messages.js";
+import type * as inbox from "../inbox.js";
+import type * as lib_demoData from "../lib/demoData.js";
+import type * as lib_triage from "../lib/triage.js";
 
 import type {
   ApiFromModules,
@@ -17,7 +19,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  messages: typeof messages;
+  inbox: typeof inbox;
+  "lib/demoData": typeof lib_demoData;
+  "lib/triage": typeof lib_triage;
 }>;
 
 /**

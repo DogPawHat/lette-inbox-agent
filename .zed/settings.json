@@ -1,0 +1,17 @@
+{
+  "formatter": {
+    "language_server": {
+      "name": "oxc"
+    }
+  },
+  "lsp": {
+    "oxc": {
+      "settings": {
+        "configPath": ".oxlintrc.json",
+        "fmt": {
+          "configPath": ".oxfmtrc.json"
+        }
+      }
+    }
+  }
+}
