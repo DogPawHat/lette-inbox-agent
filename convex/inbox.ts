@@ -405,10 +405,13 @@ export const processThreadInternal = internalAction({
       return { ok: false };
     }
 
-    const result = await runWorkflowAnalysis(workflowData.email, workflowData.context);
+    const result = await runWorkflowAnalysis(ctx, workflowData.email, workflowData.context, {
+      agentThreadId: workflowData.agentThreadId,
+    });
     await ctx.runMutation(internal.inbox.applyAnalysis, {
       threadId: args.threadId,
       source: result.source,
+      agentThreadId: result.agentThreadId,
       analysis: result.analysis,
     });
 
@@ -445,6 +448,7 @@ export const workflowContextForThread = internalQuery({
     }
 
     return {
+      agentThreadId: thread.agentThreadId,
       email: {
         fromName: inbound.fromName,
         fromEmail: inbound.fromEmail,
@@ -501,6 +505,7 @@ export const applyAnalysis = internalMutation({
   args: {
     threadId: v.id("threads"),
     source: v.string(),
+    agentThreadId: v.optional(v.string()),
     analysis: v.object({
       classification: v.string(),
       senderRole: v.string(),
@@ -611,6 +616,7 @@ export const applyAnalysis = internalMutation({
 
     await ctx.db.patch(args.threadId, {
       workflowStatus: "processed",
+      agentThreadId: args.agentThreadId,
       classification: args.analysis.classification,
       senderRole: args.analysis.senderRole,
       matchedPersonId: matchedPerson?._id,

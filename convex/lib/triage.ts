@@ -1,7 +1,9 @@
 "use node";
 
+import { Agent } from "@convex-dev/agent";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { generateText, Output } from "ai";
+import type { ActionCtx } from "../_generated/server";
+import { components } from "../_generated/api";
 import {
   analysisOutputSchema,
   type EmailClassification,
@@ -105,19 +107,47 @@ const openrouter = createOpenRouter({
   },
 });
 
+function createInboxAgent() {
+  return new Agent(components.agent, {
+    name: "lette-inbox-triage",
+    languageModel: openrouter("moonshotai/kimi-k2.5"),
+    instructions: [
+      "You are triaging email for a property manager.",
+      "Return only structured output matching the provided schema.",
+      "Preserve seeded slot ids and deterministic cost bounds when they are already known.",
+      "Spam and irrelevant emails should not generate replies.",
+      `Maintenance that could exceed ${managerEscalationThreshold} euro must be escalated to the manager.`,
+    ].join(" "),
+    maxSteps: 1,
+  });
+}
+
 export async function runWorkflowAnalysis(
+  ctx: ActionCtx,
   email: WorkflowEmail,
   context: WorkflowContext,
-): Promise<{ analysis: ThreadAnalysisOutput; source: "rules" | "ai" }> {
+  options?: { agentThreadId?: string },
+): Promise<{ analysis: ThreadAnalysisOutput; source: "rules" | "ai"; agentThreadId?: string }> {
   const baseline = runDeterministicTriage(email, context);
 
   if (!process.env.OPENROUTER_API_KEY) {
-    return { analysis: baseline, source: "rules" };
+    return { analysis: baseline, source: "rules", agentThreadId: options?.agentThreadId };
   }
 
   try {
-    const aiAnalysis = await refineWithAi(email, context, baseline);
-    return { analysis: aiAnalysis, source: "ai" };
+    const agent = createInboxAgent();
+    const userId = email.fromEmail.toLowerCase();
+    const threadId =
+      options?.agentThreadId ??
+      (
+        await agent.createThread(ctx, {
+          title: email.subject,
+          summary: `Inbox triage for ${email.fromEmail}`,
+          userId,
+        })
+      ).threadId;
+    const aiAnalysis = await refineWithAi(ctx, agent, threadId, userId, email, context, baseline);
+    return { analysis: aiAnalysis, source: "ai", agentThreadId: threadId };
   } catch {
     return {
       analysis: {
@@ -125,6 +155,7 @@ export async function runWorkflowAnalysis(
         reviewFlags: [...baseline.reviewFlags, "AI refinement unavailable; used rules fallback."],
       },
       source: "rules",
+      agentThreadId: options?.agentThreadId,
     };
   }
 }
@@ -214,52 +245,48 @@ export function runDeterministicTriage(
 }
 
 async function refineWithAi(
+  ctx: ActionCtx,
+  agent: Agent,
+  threadId: string,
+  userId: string,
   email: WorkflowEmail,
   context: WorkflowContext,
   baseline: ThreadAnalysisOutput,
 ): Promise<ThreadAnalysisOutput> {
-  const result = await generateText({
-    model: openrouter("moonshotai/kimi-k2.5"),
-    temperature: 0.2,
-    system: [
-      "You are triaging email for a property manager.",
-      "Return only structured output matching the schema.",
-      "Preserve the provided seeded slot ids and cost bounds where they exist.",
-      "Spam and irrelevant emails should not generate replies.",
-      `Maintenance that could exceed ${managerEscalationThreshold} euro must be escalated to the manager.`,
-    ].join(" "),
-    prompt: JSON.stringify(
-      {
-        email,
-        knownContext: {
-          people: context.people.map((person) => ({
-            name: person.name,
-            email: person.email,
-            role: person.role,
-          })),
-          properties: context.properties.map((property) => ({
-            code: property.code,
-            name: property.name,
-          })),
-          units: context.units.map((unit) => ({
-            code: unit.code,
-            label: unit.label,
-          })),
-        },
-        baseline,
-      },
-      null,
-      2,
-    ),
-    output: Output.object({
+  const result = await agent.generateObject(
+    ctx,
+    { threadId, userId },
+    {
       schema: analysisOutputSchema,
-      name: "email_triage",
-      description: "Structured property-management inbox triage output",
-    }),
-  });
+      prompt: JSON.stringify(
+        {
+          email,
+          knownContext: {
+            people: context.people.map((person) => ({
+              name: person.name,
+              email: person.email,
+              role: person.role,
+            })),
+            properties: context.properties.map((property) => ({
+              code: property.code,
+              name: property.name,
+            })),
+            units: context.units.map((unit) => ({
+              code: unit.code,
+              label: unit.label,
+            })),
+          },
+          baseline,
+        },
+        null,
+        2,
+      ),
+      temperature: 0.2,
+    },
+  );
 
   const merged = {
-    ...result.output,
+    ...result.object,
     matchedPersonEmail: baseline.matchedPersonEmail,
     matchedPropertyCode: baseline.matchedPropertyCode,
     matchedUnitCode: baseline.matchedUnitCode,
@@ -269,14 +296,12 @@ async function refineWithAi(
     suggestedSlots: baseline.suggestedSlots,
     needsManagerReview:
       baseline.needsManagerReview ||
-      result.output.needsManagerReview ||
+      result.object.needsManagerReview ||
       (baseline.estimatedCostMax ?? 0) > managerEscalationThreshold,
     escalationReason:
-      baseline.escalationReason !== "none" ? baseline.escalationReason : result.output.escalationReason,
-    reviewFlags: Array.from(new Set([...baseline.reviewFlags, ...result.output.reviewFlags])),
-    missingInformation: Array.from(
-      new Set([...baseline.missingInformation, ...result.output.missingInformation]),
-    ),
+      baseline.escalationReason !== "none" ? baseline.escalationReason : result.object.escalationReason,
+    reviewFlags: Array.from(new Set([...baseline.reviewFlags, ...result.object.reviewFlags])),
+    missingInformation: Array.from(new Set([...baseline.missingInformation, ...result.object.missingInformation])),
   };
 
   return analysisOutputSchema.parse(merged);

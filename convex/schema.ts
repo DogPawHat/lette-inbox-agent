@@ -74,6 +74,7 @@ export default defineSchema({
     latestMessageAt: v.string(),
     status: v.string(),
     workflowStatus: v.string(),
+    agentThreadId: v.optional(v.string()),
     classification: v.optional(v.string()),
     senderRole: v.optional(v.string()),
     matchedPersonId: v.optional(v.id("people")),

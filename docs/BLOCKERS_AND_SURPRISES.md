@@ -13,8 +13,8 @@ You clarified that the OpenRouter key would be provided later and asked for it t
 
 ## Items That Were Continually Confusing or Surprising
 
-### 1. `@convex-dev/agent` and `ai@6` did not line up
-The current `@convex-dev/agent` package declared a peer dependency on `ai@^5`, while this project needed `ai@6`. That made the component path unreliable for this implementation. The practical result was to use custom Convex actions for the workflow instead of the Convex Agent package.
+### 1. `@convex-dev/agent` package channel mattered more than it first appeared
+The npm `latest` release of `@convex-dev/agent` still declared a peer dependency on `ai@^5`, which made the first installation attempt fail against this app's `ai@6` requirement. The maintained alpha channel and GitHub `main` package metadata were already updated for `ai@^6`, so the correct conclusion was not "the component does not work with AI SDK v6" but rather "the compatible release currently lives on the alpha channel."
 
 ### 2. AI SDK v6 runtime export shape was not what older examples suggest
 The installed `ai@6` package did not expose the structured-output helper the way older examples imply. The runtime-compatible pattern had to be confirmed against the installed package surface and adjusted to use the supported export shape.
