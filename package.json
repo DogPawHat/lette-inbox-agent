@@ -1,5 +1,6 @@
 {
   "name": "lette-inbox-agent",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "imports": {
