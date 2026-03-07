@@ -61,14 +61,17 @@ export default function ThemeToggle() {
     window.localStorage.setItem("theme", nextMode);
   }
 
+  const label = `Theme: ${mode}`;
+
   return (
     <Button
       type="button"
       variant="outline"
       size="sm"
       onClick={toggleMode}
-      aria-label={`Theme mode: ${mode}`}
-      className="rounded-full bg-card"
+      aria-label={label}
+      title={label}
+      className="rounded-[10px] border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
     >
       {mode === "light" ? (
         <Sun className="size-4" />
