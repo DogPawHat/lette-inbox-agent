@@ -1,367 +1,326 @@
-import { convexQuery } from "@convex-dev/react-query";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
-import { useAction, useMutation as useConvexMutation } from "convex/react";
-import { AlertTriangle, Bot, CalendarClock, MailPlus, RefreshCw, ShieldAlert } from "lucide-react";
-import { useMemo, useState } from "react";
-import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
-import { Badge } from "#/components/ui/badge";
-import { Button, buttonVariants } from "#/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "#/components/ui/card";
-import { Skeleton } from "#/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "#/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
-import { formatCostRange, formatDateTime } from "#/lib/format";
-import {
-  classificationBadgeClass,
-  labelForClassification,
-  labelForIntent,
-  labelForRole,
-  labelForUrgency,
-  replyStatusClass,
-  replyStatusLabel,
-  urgencyBadgeClass,
-} from "#/lib/presentation";
+import { createFileRoute } from '@tanstack/react-router'
+import { useState } from 'react'
+import { Mail, AlertTriangle, Clock, CheckCircle, Search, Filter, ArrowUpRight } from 'lucide-react'
 
-export const Route = createFileRoute("/")({
-  component: InboxDashboard,
-});
+export const Route = createFileRoute('/')({ component: InboxAgent })
 
-type FilterValue = "attention" | "actionable" | "noise" | "all";
+type Urgency = 'critical' | 'high' | 'medium' | 'low'
+type SenderType = 'tenant' | 'landlord' | 'contractor' | 'prospect'
+type Status = 'new' | 'in_progress' | 'resolved'
 
-function InboxDashboard() {
-  const [filter, setFilter] = useState<FilterValue>("attention");
-  const { data, isPending } = useQuery(convexQuery(api.inbox.dashboard, {}));
-  const seedDemo = useConvexMutation(api.inbox.seedDemo);
-  const processAll = useAction(api.inbox.processAllThreads);
-  const processThread = useAction(api.inbox.processThread);
+interface Message {
+  id: string
+  subject: string
+  sender: string
+  senderType: SenderType
+  property: string
+  unit?: string
+  urgency: Urgency
+  status: Status
+  preview: string
+  receivedAt: string
+  threadCount: number
+  recommendedAction: string
+}
 
-  const resetMutation = useMutation({
-    mutationFn: async () => {
-      await seedDemo({});
-      await processAll({});
-    },
-  });
+const MOCK_MESSAGES: Message[] = [
+  {
+    id: '1',
+    subject: 'Water leak in bathroom - getting worse',
+    sender: 'Sarah Mitchell',
+    senderType: 'tenant',
+    property: '25 Wardour Street',
+    unit: 'Flat 4B',
+    urgency: 'critical',
+    status: 'new',
+    preview: 'Hi, I reported a leak last week and it\'s now spreading to the hallway ceiling. Water is dripping constantly and I\'m worried about structural damage...',
+    receivedAt: '12 min ago',
+    threadCount: 4,
+    recommendedAction: 'Escalate to emergency maintenance — create work order for plumber',
+  },
+  {
+    id: '2',
+    subject: 'Re: Lease renewal discussion',
+    sender: 'James Crawford',
+    senderType: 'landlord',
+    property: 'Storyhouse, Manchester',
+    urgency: 'high',
+    status: 'in_progress',
+    preview: 'Following our conversation, I\'d like to proceed with the 5% increase as discussed. Can you prepare the renewal documents for units 12-18...',
+    receivedAt: '1 hour ago',
+    threadCount: 7,
+    recommendedAction: 'Draft lease renewal documents for 7 units — send to landlord for review',
+  },
+  {
+    id: '3',
+    subject: 'Viewing request - 2 bed apartment',
+    sender: 'Olivia Park',
+    senderType: 'prospect',
+    property: 'Hali Tower, London E1',
+    unit: 'Unit 8-302',
+    urgency: 'medium',
+    status: 'new',
+    preview: 'I saw your listing on Rightmove and would love to arrange a viewing. My budget is around £2,500/month and I\'d like to move in by March...',
+    receivedAt: '2 hours ago',
+    threadCount: 1,
+    recommendedAction: 'Schedule viewing — send available time slots via WhatsApp',
+  },
+  {
+    id: '4',
+    subject: 'Invoice for boiler replacement - Flat 7A',
+    sender: 'Mark Davies - DM Heating',
+    senderType: 'contractor',
+    property: '25 Wardour Street',
+    unit: 'Flat 7A',
+    urgency: 'medium',
+    status: 'in_progress',
+    preview: 'Please find attached invoice #4521 for the boiler replacement completed on 28 Feb. Total: £2,840 inc VAT. Payment terms: 30 days...',
+    receivedAt: '3 hours ago',
+    threadCount: 3,
+    recommendedAction: 'Approve invoice and forward to accounts for payment',
+  },
+  {
+    id: '5',
+    subject: 'Parking dispute between tenants',
+    sender: 'Alex Turner',
+    senderType: 'tenant',
+    property: 'Lugus Residences',
+    unit: 'Flat 2',
+    urgency: 'low',
+    status: 'new',
+    preview: 'Just wanted to flag that the tenant in Flat 6 has been parking in my allocated space again. This is the third time this month...',
+    receivedAt: '5 hours ago',
+    threadCount: 1,
+    recommendedAction: 'Send parking reminder to Flat 6 tenant — reference lease terms',
+  },
+  {
+    id: '6',
+    subject: 'Move-out inspection needed',
+    sender: 'Ferri Khan',
+    senderType: 'tenant',
+    property: 'Ardstone Court',
+    unit: 'Apartment 5',
+    urgency: 'medium',
+    status: 'new',
+    preview: 'As discussed, my tenancy ends on 31 March. Could you arrange the move-out inspection? I\'ve already arranged professional cleaning...',
+    receivedAt: '6 hours ago',
+    threadCount: 2,
+    recommendedAction: 'Schedule move-out inspection — prepare deposit return assessment',
+  },
+]
 
-  const rerunMutation = useMutation({
-    mutationFn: async (threadId: Id<"threads">) => {
-      await processThread({ threadId });
-    },
-  });
+const urgencyConfig: Record<Urgency, { label: string; className: string }> = {
+  critical: { label: 'Critical', className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400' },
+  high: { label: 'High', className: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400' },
+  medium: { label: 'Medium', className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' },
+  low: { label: 'Low', className: 'bg-accent text-muted-foreground' },
+}
 
-  const filteredThreads = useMemo(() => {
-    const threads = data?.threads ?? [];
-    switch (filter) {
-      case "attention":
-        return threads.filter(
-          (thread) =>
-            thread.classification === "actionable" &&
-            (thread.needsManagerReview || thread.urgency === "high" || thread.urgency === "critical"),
-        );
-      case "actionable":
-        return threads.filter((thread) => thread.classification === "actionable");
-      case "noise":
-        return threads.filter((thread) => thread.classification !== "actionable");
-      default:
-        return threads;
-    }
-  }, [data?.threads, filter]);
+const senderTypeConfig: Record<SenderType, { label: string; className: string }> = {
+  tenant: { label: 'Tenant', className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400' },
+  landlord: { label: 'Landlord', className: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-400' },
+  contractor: { label: 'Contractor', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400' },
+  prospect: { label: 'Prospect', className: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-400' },
+}
+
+const statusConfig: Record<Status, { label: string; icon: typeof Mail }> = {
+  new: { label: 'New', icon: Mail },
+  in_progress: { label: 'In Progress', icon: Clock },
+  resolved: { label: 'Resolved', icon: CheckCircle },
+}
+
+function InboxAgent() {
+  const [selectedId, setSelectedId] = useState<string | null>('1')
+  const [filterUrgency, setFilterUrgency] = useState<Urgency | 'all'>('all')
+
+  const filtered = filterUrgency === 'all'
+    ? MOCK_MESSAGES
+    : MOCK_MESSAGES.filter(m => m.urgency === filterUrgency)
+
+  const selected = MOCK_MESSAGES.find(m => m.id === selectedId)
 
   return (
-    <div className="page-shell px-4 py-8">
-      <section className="panel-surface overflow-hidden rounded-[1.75rem]">
-        <div className="grid gap-8 px-6 py-7 lg:grid-cols-[1.45fr_0.85fr] lg:px-8">
-          <div className="space-y-5">
-            <Badge className="border-transparent bg-primary/12 text-primary">
-              Agentic property inbox demo
-            </Badge>
-            <div className="space-y-3">
-              <h1 className="display-title max-w-4xl text-4xl leading-none font-semibold tracking-tight md:text-6xl">
-                See which emails matter, what they mean, and what should happen next.
-              </h1>
-              <p className="max-w-3xl text-base text-muted-foreground md:text-lg">
-                The workflow filters noise, matches tenants to properties, estimates maintenance cost,
-                suggests slots, and escalates anything that could exceed the 100 euro approval line.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={() => resetMutation.mutate()} disabled={resetMutation.isPending}>
-                {resetMutation.isPending ? (
-                  <RefreshCw className="size-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="size-4" />
-                )}
-                Load 20-email demo
-              </Button>
-              <Link to="/intake" className={buttonVariants({ variant: "outline" })}>
-                <MailPlus className="size-4" />
-                Add manual email
-              </Link>
-            </div>
+    <main className="page-wrap flex h-[calc(100vh-64px)] flex-col gap-4 px-4 py-4">
+      {/* Top bar */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-2xl tracking-tight text-foreground sm:text-3xl">Inbox</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {MOCK_MESSAGES.filter(m => m.status === 'new').length} new messages requiring attention
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative hidden sm:block">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search messages..."
+              className="h-9 rounded-[10px] border border-border bg-card pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
           </div>
+          <div className="flex items-center gap-1 rounded-[10px] border border-border bg-card p-1">
+            <Filter className="ml-2 h-3.5 w-3.5 text-muted-foreground" />
+            {(['all', 'critical', 'high', 'medium', 'low'] as const).map((u) => (
+              <button
+                key={u}
+                onClick={() => setFilterUrgency(u)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  filterUrgency === u
+                    ? 'bg-[#0f1016] text-[#edede9]'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {u === 'all' ? 'All' : u.charAt(0).toUpperCase() + u.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
-          <Card className="border-0 bg-transparent shadow-none">
-            <CardHeader className="px-0">
-              <CardTitle>Workflow promise</CardTitle>
-              <CardDescription>
-                Every thread should answer who sent it, what they want, urgency, and whether the
-                agent can respond without the manager.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3 px-0">
-              {[
-                {
-                  icon: ShieldAlert,
-                  title: "Noise stays out of the main queue",
-                  copy: "Spam and irrelevant messages remain visible but stripped from the action lane.",
-                },
-                {
-                  icon: AlertTriangle,
-                  title: "Cost-aware maintenance escalation",
-                  copy: "Any maintenance job with an upper estimate above EUR 100 escalates automatically.",
-                },
-                {
-                  icon: CalendarClock,
-                  title: "Slots where the app has capability",
-                  copy: "Viewing and contractor availability are suggested from seeded calendars.",
-                },
-                {
-                  icon: Bot,
-                  title: "Auto-reply only for low-risk work",
-                  copy: "Routine questions and capability-based replies can be sent by the agent.",
-                },
-              ].map((item) => (
-                <div
-                  key={item.title}
-                  className="rounded-2xl border border-border/70 bg-card px-4 py-3"
-                >
-                  <div className="mb-2 inline-flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <item.icon className="size-4" />
+      {/* Main content */}
+      <div className="flex min-h-0 flex-1 gap-4">
+        {/* Message list */}
+        <div className="w-full shrink-0 overflow-y-auto rounded-[20px] bg-card ring-1 ring-border/50 sm:w-[380px] lg:w-[420px]">
+          {filtered.map((msg) => {
+            const urgency = urgencyConfig[msg.urgency]
+            const sender = senderTypeConfig[msg.senderType]
+            const isSelected = selectedId === msg.id
+
+            return (
+              <button
+                key={msg.id}
+                onClick={() => setSelectedId(msg.id)}
+                className={`flex w-full flex-col gap-2 border-b border-border/50 p-4 text-left transition-colors last:border-b-0 ${
+                  isSelected ? 'bg-accent/50' : 'hover:bg-muted/50'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${sender.className}`}>
+                      {sender.label}
+                    </span>
+                    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${urgency.className}`}>
+                      {urgency.label}
+                    </span>
                   </div>
-                  <p className="mb-1 text-sm font-semibold">{item.title}</p>
-                  <p className="m-0 text-sm text-muted-foreground">{item.copy}</p>
+                  <span className="shrink-0 text-xs text-muted-foreground">{msg.receivedAt}</span>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {isPending
-          ? Array.from({ length: 4 }, (_, index) => <StatsSkeleton key={index} />)
-          : [
-              {
-                label: "Actionable threads",
-                value: data?.overview.actionableCount ?? 0,
-                copy: "Inbox items that survived filtering",
-              },
-              {
-                label: "Attention now",
-                value: data?.overview.attentionCount ?? 0,
-                copy: "High-priority or manager-reviewed work",
-              },
-              {
-                label: "Auto replies sent",
-                value: data?.overview.autoReplyCount ?? 0,
-                copy: "Low-risk replies issued by the workflow",
-              },
-              {
-                label: "Noise filtered",
-                value: (data?.overview.spamCount ?? 0) + (data?.overview.irrelevantCount ?? 0),
-                copy: "Spam and irrelevant messages kept out of focus",
-              },
-            ].map((item) => (
-              <Card key={item.label} className="panel-surface rounded-[1.35rem]">
-                <CardHeader>
-                  <CardDescription>{item.label}</CardDescription>
-                  <CardTitle className="text-3xl">{item.value}</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0 text-sm text-muted-foreground">{item.copy}</CardContent>
-              </Card>
-            ))}
-      </section>
-
-      <section className="mt-6 panel-surface rounded-[1.75rem] px-4 py-5 md:px-6">
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">Inbox queue</h2>
-            <p className="m-0 text-sm text-muted-foreground">
-              Prioritized by urgency, manager review, and freshness. Maintenance over EUR{" "}
-              {data?.overview.costThreshold ?? 100} is escalated.
-            </p>
-          </div>
-
-          <Tabs value={filter} onValueChange={(value) => setFilter(value as FilterValue)}>
-            <TabsList>
-              <TabsTrigger value="attention">Attention</TabsTrigger>
-              <TabsTrigger value="actionable">Actionable</TabsTrigger>
-              <TabsTrigger value="noise">Noise</TabsTrigger>
-              <TabsTrigger value="all">All</TabsTrigger>
-            </TabsList>
-          </Tabs>
+                <p className={`text-sm leading-snug font-medium text-foreground ${msg.status !== 'new' ? 'opacity-70' : ''}`}>
+                  {msg.subject}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {msg.sender} &middot; {msg.property}{msg.unit ? `, ${msg.unit}` : ''}
+                </p>
+                <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground/80">
+                  {msg.preview}
+                </p>
+                {msg.threadCount > 1 && (
+                  <span className="text-[10px] text-muted-foreground">{msg.threadCount} messages in thread</span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
-        {isPending ? (
-          <div className="grid gap-3">
-            {Array.from({ length: 8 }, (_, index) => (
-              <Skeleton key={index} className="h-16 w-full rounded-2xl" />
-            ))}
-          </div>
-        ) : filteredThreads.length === 0 ? (
-          <EmptyState resetMutation={resetMutation.isPending} onLoadDemo={() => resetMutation.mutate()} />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Thread</TableHead>
-                <TableHead>Context</TableHead>
-                <TableHead>Urgency</TableHead>
-                <TableHead>Recommendation</TableHead>
-                <TableHead>Cost</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredThreads.map((thread) => (
-                <TableRow key={thread._id} className="thread-row">
-                  <TableCell className="max-w-[22rem] whitespace-normal py-4">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge className={classificationBadgeClass(thread.classification)}>
-                          {labelForClassification(thread.classification)}
-                        </Badge>
-                        <Badge variant="outline">{labelForRole(thread.senderRole)}</Badge>
-                        <Badge variant="outline">{labelForIntent(thread.intent)}</Badge>
-                      </div>
-                      <div>
-                        <p className="mb-1 font-semibold">{thread.subject}</p>
-                        <p className="line-clamp-2 text-sm text-muted-foreground">
-                          {thread.latestSummary || thread.latestEmailSnippet}
-                        </p>
-                      </div>
-                      <p className="m-0 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                        {thread.matchedPersonName}
-                        {thread.matchedPropertyName ? ` · ${thread.matchedPropertyName}` : ""}
-                        {thread.matchedUnitCode ? ` · ${thread.matchedUnitCode}` : ""}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="whitespace-normal py-4">
-                    <div className="space-y-2 text-sm">
-                      <Badge className={replyStatusClass(thread.autoReplyStatus)}>
-                        {replyStatusLabel(thread.autoReplyStatus)}
-                      </Badge>
-                      <p className="m-0 text-muted-foreground">{thread.sourceLabel}</p>
-                      <p className="m-0 text-xs text-muted-foreground">{formatDateTime(thread.latestMessageAt)}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="space-y-2">
-                      <Badge className={urgencyBadgeClass(thread.urgency)}>
-                        {labelForUrgency(thread.urgency)}
-                      </Badge>
-                      {thread.needsManagerReview ? (
-                        <p className="m-0 text-xs font-medium text-amber-700 dark:text-amber-300">
-                          Escalated: {thread.escalationReason.replaceAll("_", " ")}
-                        </p>
-                      ) : (
-                        <p className="m-0 text-xs text-muted-foreground">Handled without escalation</p>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="max-w-[18rem] whitespace-normal py-4 text-sm">
-                    {thread.topRecommendedAction}
-                  </TableCell>
-                  <TableCell className="py-4 text-sm text-muted-foreground">
-                    {formatCostRange(thread.estimatedCostMin, thread.estimatedCostMax)}
-                  </TableCell>
-                  <TableCell className="py-4 text-right">
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Link
-                        to="/threads/$threadId"
-                        params={{ threadId: thread._id }}
-                        className={buttonVariants({ variant: "outline", size: "sm" })}
-                      >
-                        Open
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={rerunMutation.isPending}
-                        onClick={() => rerunMutation.mutate(thread._id)}
-                      >
-                        <RefreshCw
-                          className={`size-4 ${rerunMutation.isPending ? "animate-spin" : ""}`}
-                        />
-                        Re-run
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </section>
-    </div>
-  );
-}
+        {/* Detail panel */}
+        <div className="hidden min-h-0 flex-1 overflow-y-auto rounded-[20px] bg-card p-6 ring-1 ring-border/50 sm:block lg:p-8">
+          {selected ? (
+            <div className="rise-in">
+              {/* Header */}
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${senderTypeConfig[selected.senderType].className}`}>
+                      {senderTypeConfig[selected.senderType].label}
+                    </span>
+                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${urgencyConfig[selected.urgency].className}`}>
+                      {urgencyConfig[selected.urgency].label} urgency
+                    </span>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      {(() => {
+                        const StatusIcon = statusConfig[selected.status].icon
+                        return <StatusIcon className="h-3 w-3" />
+                      })()}
+                      {statusConfig[selected.status].label}
+                    </span>
+                  </div>
+                  <h2 className="font-serif text-xl tracking-tight text-foreground lg:text-2xl">
+                    {selected.subject}
+                  </h2>
+                </div>
+                <span className="shrink-0 text-sm text-muted-foreground">{selected.receivedAt}</span>
+              </div>
 
-function EmptyState({
-  onLoadDemo,
-  resetMutation,
-}: {
-  onLoadDemo: () => void;
-  resetMutation: boolean;
-}) {
-  return (
-    <Card className="rounded-[1.5rem] border-dashed bg-muted/35">
-      <CardHeader>
-        <CardTitle>No inbox data loaded yet</CardTitle>
-        <CardDescription>
-          Seed the 20-email demo to populate tenants, properties, contractors, calendars, and
-          workflow decisions.
-        </CardDescription>
-      </CardHeader>
-      <CardFooter className="justify-between">
-        <div className="text-sm text-muted-foreground">
-          The seeded scenarios include spam, routine questions, maintenance, tenancy exits, and
-          viewing requests.
+              {/* Sender info */}
+              <div className="mb-6 rounded-xl border border-border/50 bg-muted/30 p-4">
+                <div className="grid grid-cols-2 gap-4 text-sm lg:grid-cols-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">From</p>
+                    <p className="font-medium text-foreground">{selected.sender}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Property</p>
+                    <p className="font-medium text-foreground">{selected.property}</p>
+                  </div>
+                  {selected.unit && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Unit</p>
+                      <p className="font-medium text-foreground">{selected.unit}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs text-muted-foreground">Thread</p>
+                    <p className="font-medium text-foreground">{selected.threadCount} message{selected.threadCount > 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Message body */}
+              <div className="mb-6">
+                <p className="section-label mb-3">Message</p>
+                <div className="rounded-xl border border-border/50 bg-background p-4 text-sm leading-relaxed text-foreground">
+                  {selected.preview}
+                </div>
+              </div>
+
+              {/* Recommended action */}
+              <div className="mb-6">
+                <p className="section-label mb-3">Recommended Action</p>
+                <div className="flex items-start gap-3 rounded-xl border border-accent bg-accent/30 p-4">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-foreground/60" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{selected.recommendedAction}</p>
+                  </div>
+                  <button className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90">
+                    Take action
+                    <ArrowUpRight className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick actions */}
+              <div className="flex flex-wrap gap-2">
+                <button className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted">
+                  Reply
+                </button>
+                <button className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted">
+                  Forward
+                </button>
+                <button className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted">
+                  Create work order
+                </button>
+                <button className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted">
+                  Mark resolved
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Select a message to view details
+            </div>
+          )}
         </div>
-        <Button onClick={onLoadDemo} disabled={resetMutation}>
-          {resetMutation ? "Loading…" : "Load demo"}
-        </Button>
-      </CardFooter>
-    </Card>
-  );
-}
-
-function StatsSkeleton() {
-  return (
-    <Card className="panel-surface rounded-[1.35rem]">
-      <CardHeader>
-        <Skeleton className="h-4 w-28" />
-        <Skeleton className="h-9 w-16" />
-      </CardHeader>
-      <CardContent className="pt-0">
-        <Skeleton className="h-4 w-40" />
-      </CardContent>
-    </Card>
-  );
+      </div>
+    </main>
+  )
 }
